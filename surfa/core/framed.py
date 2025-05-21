@@ -6,7 +6,7 @@ from surfa.core.labels import LabelLookup
 
 
 # mgz now has its intent encoded in the version number
-# version = (intent & 0xff ) << 8) | MGH_VERSION
+# version = (intent & 0xffff ) << 8) | MGH_VERSION
 # MGH_VERSION = 1
 class FramedArrayIntents:
     unknown     = -1
@@ -15,6 +15,7 @@ class FramedArrayIntents:
     shape       = 2
     warpmap     = 3
     warpmap_inv = 4
+    timeseries  = 5
 
 
 class FramedArray:

@@ -19,6 +19,7 @@ class tags:
     gcamorph_labels = 12
     gcamorph_meta = 13    # introduced for mgz warpfield
     gcamorph_affine = 14  # introduced for mgz warpfield (m3z outputs the same information under xform)
+    gcamorph_geom_plusshear = 15  # information output under gcamorph_geom + shear components
     old_surf_geom = 20
     surf_geom = 21
     surf_dataspace = 22   # surface tag - surface [x y z] space
@@ -125,7 +126,7 @@ def read_binary_lookup_table(file):
     file_name_size = iou.read_bytes(file, '>i4')
     # if the file comes from surfa.io.fsio.write_binary_lookup_table(), file_name_size = 0.
     # if the file comes from freesurfer/utils/colortab.cpp::znzCTABwriteIntoBinaryV2(), file_name_size > 0.
-    file.read(file_name_size).decode('utf-8')
+    file.read(file_name_size)#.decode('utf-8')
     
     total = iou.read_bytes(file, '>i4')
     if total < 1:
