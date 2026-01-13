@@ -2,7 +2,11 @@
 
 All notable changes to the surfa package are documented in this file.
 
-## [0.6.0] - 2024-09-20
+## [0.6.2] - 2025-09-08
+- Added support for voxel package conversions
+- Added complete fix for numpy 2 builds
+
+## [0.6.1] - 2024-09-20
 - Added temporary fix to prevent numpy 2 build errors
 
 ## [0.6.0] - 2023-06-30
@@ -72,7 +76,7 @@ All notable changes to the surfa package are documented in this file.
 
 ## [0.0.12] - 2022-06-29
 - Added direct indexing support for overlays.
-- Fixed bug when loading MGH files writen by ITK.
+- Fixed bug when loading MGH files written by ITK.
 
 ## [0.0.11] - 2022-06-20
 - Fixed NIFTI loading for newer nibabel versions.

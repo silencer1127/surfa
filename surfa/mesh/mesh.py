@@ -1,4 +1,3 @@
-import os
 import warnings
 import numpy as np
 from copy import deepcopy
@@ -275,7 +274,7 @@ class Mesh:
     @cached_mesh_property
     def triangles(self):
         """
-        Triangle coordinate arrary with shape (F, 3, 3). This parameter is
+        Triangle coordinate array with shape (F, 3, 3). This parameter is
         recomputed upon retrieval if the mesh changes.
         """
         return self.vertices[self.faces]
@@ -623,7 +622,7 @@ class Mesh:
 
         # we want to compute an triangle intersection test between nearby faces, so
         # build a kd tree for the centers of each triangle and lookup closest pairs.
-        # the intesection code will be smart enough to ignore self-referencing hits
+        # the intersection code will be smart enough to ignore self-referencing hits
         # as well as immediate neighboring faces
         centers = self.triangles.mean(1)
         knn = min([centers.shape[0], knn])
@@ -673,7 +672,7 @@ class Mesh:
         for iteration in range(global_iters):
             # we want to compute an triangle intersection test between nearby faces, so
             # build a kd tree for the centers of each triangle and lookup closest pairs.
-            # the intesection code will be smart enough to ignore self-referencing hits
+            # the intersection code will be smart enough to ignore self-referencing hits
             # as well as immediate neighboring faces
             centers = vertices[faces].mean(1)
             _, neighbors = cKDTree(centers).query(centers, k=knn, workers=-1)
@@ -707,7 +706,7 @@ class Mesh:
                 pinned = self.face_to_vertex_overlay(pinned, method='min')
 
                 # if we've gone through multiple global iterations without a solution, we can
-                # try more extreme appraoches by smoothing all vertices within some radius around
+                # try more extreme approaches by smoothing all vertices within some radius around
                 # intersecting vertices
                 if iteration > 25:
                     pinned = self.smooth_overlay(pinned, iters=4) > 0.99
@@ -726,3 +725,84 @@ class Mesh:
         unfixed = self.copy()
         unfixed.vertices = vertices
         return unfixed
+
+
+def is_mesh_castable(obj):
+    """
+    Determine if an object is castable to a `Mesh`
+
+    Parameters
+    ----------
+    obj : any
+        Object to cast.
+
+    Returns
+    -------
+    bool
+        True if castable to `Mesh`.
+    """
+    if isinstance(obj, Mesh):
+        return True
+
+    # check if the input is a voxel mesh
+    try:
+        import voxel as vx
+        if isinstance(obj, vx.Mesh):
+            return True
+    except ImportError:
+        pass
+
+    # as a final test, check if the input is a trimesh
+    try:
+        import trimesh
+        if isinstance(obj, trimesh.Trimesh):
+            return True
+    except ImportError:
+        pass
+
+    return False
+
+
+def cast_mesh(obj, allow_none=True, copy=False):
+    """
+    Cast object to `Mesh`
+
+    Parameters
+    ----------
+    obj : any
+        Object to cast.
+    allow_none : bool
+        Allow for `None` to be successfully passed and returned by cast.
+    copy : bool
+        Return copy if object is already the correct type.
+
+    Returns
+    -------
+    Mesh or None
+        Casted mesh.
+    """
+    if obj is None and allow_none:
+        return obj
+
+    if isinstance(obj, Mesh):
+        return obj.copy() if copy else obj
+
+    # check if the input is a voxel mesh
+    try:
+        import voxel as vx
+        if isinstance(obj, vx.Mesh):
+            return Mesh(obj.vertices.detach().cpu().numpy(),
+                        obj.faces.detach().cpu().numpy(),
+                        space='world')
+    except ImportError:
+        pass
+
+    # as a final test, check if the input is a trimesh
+    try:
+        import trimesh
+        if isinstance(obj, trimesh.Trimesh):
+            return Mesh(obj.vertices, obj.faces, space='world')
+    except ImportError:
+        pass
+
+    raise ValueError('cannot convert type %s to mesh' % type(obj).__name__)

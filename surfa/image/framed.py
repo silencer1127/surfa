@@ -1,4 +1,3 @@
-import os
 import warnings
 import numpy as np
 
@@ -30,7 +29,7 @@ class FramedImage(FramedArray):
     def __init__(self, basedim, data, geometry=None, **kwargs):
         """
         Abstract class defining an ND image array with data frames and associated geometry (i.e. data
-        elements have a mapable relationship to a world-space coordinate system). This base class includes
+        elements have a mappable relationship to a world-space coordinate system). This base class includes
         generic support for 3D and 2D FramedArray classes, which are later defined by Volume and Slice classes.
 
         Parameters
@@ -208,7 +207,7 @@ class FramedImage(FramedArray):
 
         Parameters
         ----------
-        margin : int of sequence of int
+        margin : int or sequence of int
             Add a margin to the bounding box in units of voxels. The margin will not
             extend beyond the base image shape.
 
@@ -219,19 +218,26 @@ class FramedImage(FramedArray):
         """
         mask = self.max(frames=True).data > 0
         if not np.any(mask):
-            return tuple([slice(0, s) for s in mask.shape])
-        from scipy.ndimage import find_objects
-        cropping = find_objects(mask)[0]
-        if margin is not None:
-            margin = np.repeat(margin, self.basedim) if np.isscalar(margin) else np.asarray(margin)
-            check_array(margin, ndim=1, shape=self.basedim, name='bbox margin')
-            if not np.issubdtype(margin.dtype, np.integer):
-                raise ValueError('only integers can be used for valid bbox margins')
-            start = [max(0, c.start - margin[i]) for i, c in enumerate(cropping)]
-            stop  = [min(self.baseshape[i], c.stop + margin[i]) for i, c in enumerate(cropping)]
-            step  = [c.step for c in cropping]
-            cropping = tuple([slice(*s) for s in zip(start, stop, step)])
-        return cropping
+            return tuple(slice(0, s) for s in mask.shape)
+
+        if margin is None:
+            margin = 0
+
+        if np.isscalar(margin):
+            margin = [margin] * self.basedim
+
+        margin = np.asarray(margin)
+        check_array(margin, ndim=1, shape=self.basedim, name='bbox margin')
+        if not np.issubdtype(margin.dtype, np.integer):
+            raise TypeError('bbox margin has non-integer type')
+
+        ind = np.nonzero(mask)
+        low = np.min(ind, axis=-1)
+        upp = np.max(ind, axis=-1)
+
+        low = (max(i - m, 0) for i, m in zip(low, margin))
+        upp = (min(i + m, d - 1) for i, m, d in zip(upp, margin, self.baseshape))
+        return tuple(slice(a, b + 1) for a, b in zip(low, upp))
 
     def crop_to_bbox(self, margin=None, crop_like=None):
         """
@@ -370,7 +376,7 @@ class FramedImage(FramedArray):
                 target_stop -= delta
                 source_stop -= delta
 
-                # convert to actual array slicings
+                # convert to actual array slices
                 target_slicing = tuple([slice(a, b) for a, b in zip(target_start, target_stop)])
                 source_slicing = tuple([slice(a, b) for a, b in zip(source_start, source_stop)])
 
@@ -522,7 +528,7 @@ class FramedImage(FramedArray):
                 voxsize=voxsize)
             return self.new(data, target_geom)
         else:
-            self.geom.update(voxsize=voxsize, vox2world=affine)
+            self.geom = ImageGeometry(shape=data.shape[:3], voxsize=voxsize, vox2world=affine)
             self.data = data
             return self
 
@@ -602,7 +608,7 @@ class FramedImage(FramedArray):
 
     def fit_to_shape(self, shape, center=None, copy=True):
         """
-        This is an alias to `reshape()` for backwards compatability.
+        This is an alias to `reshape()` for backwards compatibility.
 
         Parameters
         ----------
@@ -967,8 +973,18 @@ def cast_image(obj, allow_none=True, copy=False, fallback_geom=None):
     if getattr(obj, '__array__', None) is not None:
         return Volume(np.array(obj), geometry=fallback_geom)
 
-    # as a final test, check if the input is possibly a nibabel image
-    # we don't want nibabel to be required though, so ignore import errors
+    # check if the input is a voxel volume
+    try:
+        import voxel as vx
+        if isinstance(obj, vx.Volume):
+            data = obj.tensor.movedim(0, -1).cpu().detach().numpy()
+            matrix = obj.geometry.tensor.cpu().detach().numpy()
+            geometry = ImageGeometry(data.shape[:3], vox2world=matrix)
+            return Volume(data, geometry=geometry)
+    except ImportError:
+        pass
+
+    # as a final test, check if the input is a nibabel image
     try:
         import nibabel as nib
         if isinstance(obj, nib.spatialimages.SpatialImage):

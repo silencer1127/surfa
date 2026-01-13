@@ -1,4 +1,3 @@
-import os
 import warnings
 import gzip
 import numpy as np
@@ -301,7 +300,7 @@ class MGHArrayIO(protocol.IOProtocol):
             scan_params = {}
             fbytes = file.read(np.dtype('>f4').itemsize)
             if fbytes:
-                scan_params['tr'] = np.fromstring(fbytes, dtype='>f4')
+                scan_params['tr'] = np.frombuffer(fbytes, dtype='>f4')
                 scan_params['fa'] = read_bytes(file, dtype='>f4')
                 scan_params['te'] = read_bytes(file, dtype='>f4')
                 scan_params['ti'] = read_bytes(file, dtype='>f4')
@@ -796,7 +795,7 @@ class FreeSurferAnnotationIO(protocol.IOProtocol):
         # cache the zero value annotations (unknown labels)
         unknown_mask = data == 0
 
-        # conver annotation values to corresponding label values
+        # convert annotation values to corresponding label values
         mapping = self.labels_to_mapping(labels)
         ds = np.argsort(mapping)
         pos = np.searchsorted(mapping[ds], data)
@@ -821,7 +820,7 @@ class FreeSurferAnnotationIO(protocol.IOProtocol):
             Target file path.
         """
         if not isinstance(arr, Overlay):
-            raise ValueError(f'can only save 1D overlays as annotations, but got array type {typle(arr)}')
+            raise ValueError(f'can only save 1D overlays as annotations, but got array type {type(arr)}')
 
         if not np.issubdtype(arr.dtype, np.integer):
             raise ValueError(f'annotations must have integer dtype, but overlay has dtype {arr.dtype}')

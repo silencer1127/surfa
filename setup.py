@@ -2,10 +2,24 @@
 
 import re
 import pathlib
+import platform
+import sys
 
 from setuptools import setup
 from setuptools import dist
 from setuptools.extension import Extension
+from wheel.bdist_wheel import bdist_wheel
+
+
+# https://github.com/joerick/python-abi3-package-sample/blob/main/setup.py
+class bdist_wheel_abi3(bdist_wheel):  # noqa: D101
+    def get_tag(self):  # noqa: D102
+        python, abi, plat = super().get_tag()
+
+        if python.startswith("cp"):
+            return "cp311", "abi3", plat
+
+        return python, abi, plat
 
 
 requirements = [
@@ -29,25 +43,22 @@ packages = [
 # base source directory
 base_dir = pathlib.Path(__file__).parent.resolve()
 
-# we don't want to require cython for package install from
-# source distributions, like pypi installs, and the best way I
-# can think of to detect this is by checking if PKG-INFO exists
-cython_build = not base_dir.joinpath('PKG-INFO').is_file()
-
 # configure c extensions
-ext = 'pyx' if cython_build else 'c'
-ext_opts = dict(extra_compile_args=['-O3', '-std=c99'])
+ext_opts = dict(
+    extra_compile_args=['-O3', '-std=c99'],
+    define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
+)
+macros = []
+setup_opts = {}
+if sys.version_info.minor >= 11 and platform.python_implementation() == "CPython":
+    # Can create an abi3 wheel (typed memoryviews first available in 3.11)!
+    ext_opts["define_macros"].append(("Py_LIMITED_API", "0x030B0000"))
+    ext_opts["py_limited_api"] = True
+    setup_opts["cmdclass"] = {"bdist_wheel": bdist_wheel_abi3}
 extensions = [
-    Extension('surfa.image.interp', [f'surfa/image/interp.{ext}'], **ext_opts),
-    Extension('surfa.mesh.intersection', [f'surfa/mesh/intersection.{ext}'], **ext_opts),
+    Extension('surfa.image.interp', [f'surfa/image/interp.pyx'], **ext_opts),
+    Extension('surfa.mesh.intersection', [f'surfa/mesh/intersection.pyx'], **ext_opts),
 ]
-
-# if building locally or installing from somewhere that isn't
-# an sdist, like directly from github, we'll want to cythonize
-# the pyx files, so cython is a hard requirement here
-if cython_build:
-    from Cython.Build import cythonize
-    extensions = cythonize(extensions, compiler_directives={'language_level' : '3'})
 
 # since we interface the c stuff with numpy, it's another hard
 # requirement at build-time
@@ -74,12 +85,15 @@ emphasis on neuroimaging applications.
 setup(
     name='surfa',
     version=version,
+    license='MIT',
+    license_files = ('LICENSE.txt',),
     description='Utilities for medical image and surface processing.',
     long_description=long_description,
+    long_description_content_type='text/x-rst',
     author='Andrew Hoopes',
     author_email='freesurfer@nmr.mgh.harvard.edu',
     url='https://github.com/freesurfer/surfa',
-    python_requires='>=3.6',
+    python_requires='>=3.8',
     packages=packages,
     ext_modules=extensions,
     include_dirs=include_dirs,
@@ -87,9 +101,9 @@ setup(
     install_requires=requirements,
     classifiers=[
         'Development Status :: 3 - Alpha',
-        'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3',
         'Natural Language :: English',
         'Topic :: Scientific/Engineering',
     ],
+    **setup_opts,
 )

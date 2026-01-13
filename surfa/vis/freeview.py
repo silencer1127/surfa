@@ -1,7 +1,6 @@
 import os
 import shutil
 import tempfile
-import numpy as np
 
 from surfa import Mesh
 from surfa import load_volume
@@ -10,6 +9,8 @@ from surfa.system import run
 from surfa.system import collect_output
 from surfa.image import cast_image
 from surfa.mesh import cast_overlay
+from surfa.mesh import cast_mesh
+from surfa.mesh import is_mesh_castable
 
 
 class Freeview:
@@ -123,13 +124,12 @@ class Freeview:
                 print(f'freeview error: mesh file {mesh} does not exist')
                 return
             mesh_filename = mesh
-        elif isinstance(mesh, Mesh):
-            mesh_filename = _unique_filename('mesh', '', self.tempdir)
+        else:
+            mesh = cast_mesh(mesh, allow_none=False)
+            mesh_filename = _unique_filename('mesh', 'srf', self.tempdir)
             mesh.save(mesh_filename)
             if self.debug:
                 print(f'wrote mesh to {mesh_filename}')
-        else:
-            raise ValueError(f'expected type Mesh to add_mesh, but got type {mesh.__class__.__name__}')
 
         # extra tags for the mesh
         tags = ''
@@ -170,8 +170,8 @@ class Freeview:
         if name is not None:
             tags += f':name={name}'
         
-        # add the path to the temp vol to the internal list of volumes
-        self._meshes.append(filename)
+        # add the path to the temp mesh to the internal list of meshes
+        self._meshes.append(mesh_filename)
 
         # configure the corresponding freeview argument
         self.arguments.append('-f ' + mesh_filename + tags + _convert_kwargs_to_tags(kwargs))
@@ -297,7 +297,7 @@ class FreeviewAnnot:
 
 def fv(*args, **kwargs):
     """
-    Freeview wrapper to quickly load an arbitray number of elements. Inputs
+    Freeview wrapper to quickly load an arbitrary number of elements. Inputs
     can be existing filenames, images, meshes, or numpy arrays. Lists
     are also supported. Use the `Freeview` class directly to configure a
     more advanced session.
@@ -324,7 +324,7 @@ def fv(*args, **kwargs):
 
     # cycle through arguments
     for arg in flatten(args):
-        if isinstance(arg, Mesh):
+        if is_mesh_castable(arg):
             fv.add_mesh(arg)
         else:
             fv.add_image(arg)
@@ -338,6 +338,8 @@ def _find_vgl():
     Locate the VGL wrapper if installed.
     """
     have_key = os.path.isfile('/etc/opt/VirtualGL/vgl_xauth_key')
+    # test for egl support
+    has_egl = os.path.isfile('/opt/VirtualGL/bin/eglinfo')
     vgl_path = shutil.which('vglrun')
     if vgl_path is None:
         vgl_path = shutil.which('vglrun', path='/usr/pubsw/bin')
@@ -346,6 +348,9 @@ def _find_vgl():
     islocal = any([os.environ.get('DISPLAY', '').endswith(string) for string in (':0', ':0.0')])
     no_glx = 'NV-GLX' in collect_output('xdpyinfo')[0]
     if not islocal and not no_glx:
+        # add flag for egl if supported
+        if has_egl:
+            vgl_path = vgl_path + ' -d egl'
         return vgl_path
     return None
 

@@ -1,6 +1,3 @@
-import os
-import gzip
-import warnings
 import numpy as np
 
 from surfa.io import fsio
@@ -8,6 +5,7 @@ from surfa.io import utils as iou
 from surfa.transform.geometry import ImageGeometry
 from surfa.core.labels import LabelLookup
 from surfa.core.framed import FramedArrayIntents
+from surfa import get_logger
 
 
 class FSNifti1Extension:
@@ -15,18 +13,18 @@ class FSNifti1Extension:
     This class handles Freesurfer Nifti1 header extension IO.
 
     Class variables:
-      _verbose:      if it is True, output debug information
+      log:           Reference to the global surfa logger
       _content:      FSNifti1Extension.Content
     """
 
-    def __init__(self, verbose=False):
+    def __init__(self, log_level=None):
         """
         FSNifti1Extension Constructor
         """
 
         # initialization
-        self._verbose = verbose
         self._content = FSNifti1Extension.Content()
+        self.log = get_logger(log_level)
 
 
     def read(self, fileobj, esize, offset=0):
@@ -57,10 +55,9 @@ class FSNifti1Extension:
         self.content.endian = fsexthdr[0]
         self.content.intent = int.from_bytes(fsexthdr[1:3], byteorder='big')
         self.content.version = fsexthdr[3]
-
-        if (self._verbose):
-            print(f'[DEBUG] FSNifti1Extension.read(): esize = {esize:6d}')
-            print(f'[DEBUG] FSNifti1Extension.read(): endian = \'{self.content.endian:c}\', intent = {self.content.intent:d}, version = {self.content.version:d}')
+        
+        self.log.debug(f'[DEBUG] FSNifti1Extension.read(): esize = {esize:6d}')
+        self.log.debug(f'[DEBUG] FSNifti1Extension.read(): endian = \'{self.content.endian:c}\', intent = {self.content.intent:d}, version = {self.content.version:d}')
 
         # process Freesurfer Nifti1 extension tag data
         tagdatalen = esize - 12  # exclude esize, ecode, fsexthdr
@@ -69,8 +66,7 @@ class FSNifti1Extension:
             # read tagid (4 bytes), data-length (8 bytes)
             (tag, length) = FSNifti1Extension.read_tag(fileobj)
 
-            if (self._verbose): 
-                print(f'[DEBUG] FSNifti1Extension.read(): remaining taglen = {tagdatalen:6d} (tag = {tag:2d}, length = {length:5d})')
+            self.log.debug(f'[DEBUG] FSNifti1Extension.read(): remaining taglen = {tagdatalen:6d} (tag = {tag:2d}, length = {length:5d})')
 
             if (tag == 0):
                 break
@@ -133,9 +129,8 @@ class FSNifti1Extension:
             # check if we reach the end
             tagdatalen -= (len_tagheader + length)
             if (tagdatalen < len_tagheader):
-                if (self._verbose):
-                    print(f'[DEBUG] FSNifti1Extension.read(): remaining taglen = {tagdatalen:6d}')
-                break;
+                self.log.debug(f'[DEBUG] FSNifti1Extension.read(): remaining taglen = {tagdatalen:6d}')
+                break
 
         return self.content
 
@@ -168,8 +163,7 @@ class FSNifti1Extension:
             iou.write_int(fileobj, content.version, size=1, byteorder='big')
 
         num_bytes = 4
-        if (self._verbose):
-            print(f'[DEBUG] FSNifti1Extension.write():              dlen = {num_bytes:6d}')
+        self.log.debug(f'[DEBUG] FSNifti1Extension.write():              dlen = {num_bytes:6d}')
 
         # tag data
         addtaglength = 12
@@ -181,8 +175,8 @@ class FSNifti1Extension:
             tag = FSNifti1Extension.Tags.gcamorph_geom
             length = FSNifti1Extension.getlen_gcamorph_geom(source_fname, target_fname)
             num_bytes += length + addtaglength
-            if (self._verbose):
-                print(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+            self.log.debug(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+
             if (not countbytesonly):
                 FSNifti1Extension.write_tag(fileobj, tag, length)
                 iou.write_geom(fileobj,
@@ -199,8 +193,8 @@ class FSNifti1Extension:
             tag = FSNifti1Extension.Tags.gcamorph_geom_plusshear
             length = FSNifti1Extension.getlen_gcamorph_geom(source_fname, target_fname, shearless=False)
             num_bytes += length + addtaglength
-            if (self._verbose):
-                print(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+            self.log.debug(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+
             if (not countbytesonly):
                 FSNifti1Extension.write_tag(fileobj, tag, length)
                 iou.write_geom(fileobj,
@@ -220,8 +214,8 @@ class FSNifti1Extension:
             tag = FSNifti1Extension.Tags.gcamorph_meta
             length = 12
             num_bytes += length + addtaglength
-            if (self._verbose):
-                print(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+            self.log.debug(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+
             if (not countbytesonly):
                 FSNifti1Extension.write_tag(fileobj, tag, length)
                 iou.write_bytes(fileobj, content.warpmeta['format'], dtype='>i4')
@@ -234,8 +228,8 @@ class FSNifti1Extension:
             tag = FSNifti1Extension.Tags.end_data
             length = 1  # extra char '*'
             num_bytes += length + addtaglength
-            if (self._verbose):
-                print(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+            self.log.debug(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+
             if (not countbytesonly):
                 FSNifti1Extension.write_tag(fileobj, tag, length)
                 extrachar = '*'
@@ -249,8 +243,8 @@ class FSNifti1Extension:
             tag = FSNifti1Extension.Tags.old_colortable
             length = FSNifti1Extension.getlen_labels(content.labels)
             num_bytes += length + addtaglength
-            if (self._verbose):
-                print(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+            self.log.debug(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+
             if (not countbytesonly):
                 FSNifti1Extension.write_tag(fileobj, tag, length)
                 fsio.write_binary_lookup_table(fileobj, content.labels)
@@ -261,8 +255,8 @@ class FSNifti1Extension:
                 tag = FSNifti1Extension.Tags.history
                 length = len(hist)
                 num_bytes += length + addtaglength
-                if (self._verbose):
-                    print(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+                self.log.debug(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+
                 if (not countbytesonly):
                     FSNifti1Extension.write_tag(fileobj, tag, length)
                     fileobj.write(hist.encode('utf-8'))
@@ -271,8 +265,8 @@ class FSNifti1Extension:
         tag = FSNifti1Extension.Tags.dof
         length = 4
         num_bytes += length + addtaglength
-        if (self._verbose):
-            print(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+        self.log.debug(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+
         if (not countbytesonly):
             FSNifti1Extension.write_tag(fileobj, tag, length)
             iou.write_int(fileobj, content.dof, size=4)
@@ -282,8 +276,8 @@ class FSNifti1Extension:
             tag = FSNifti1Extension.Tags.scan_parameters
             length = 20 + len(content.scan_parameters['pedir'])
             num_bytes += length + addtaglength
-            if (self._verbose):
-                print(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+            self.log.debug(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+
             if (not countbytesonly):
                 FSNifti1Extension.write_tag(fileobj, tag, length)
                 iou.write_bytes(fileobj, content.scan_parameters['te'], '>f4')
@@ -306,8 +300,8 @@ class FSNifti1Extension:
         tag = FSNifti1Extension.Tags.end_data
         length = 1  # extra char '*'
         num_bytes += length + addtaglength
-        if (self._verbose):
-            print(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+        self.log.debug(f'[DEBUG] FSNifti1Extension.write(): +{length:5d}, +{addtaglength:d}, dlen = {num_bytes:6d}, TAG = {tag:2d}')
+
         if (not countbytesonly):
             FSNifti1Extension.write_tag(fileobj, tag, length)
             extrachar = '*'
